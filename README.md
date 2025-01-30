@@ -12,3 +12,4 @@ This will use input_metadata_sheet.csv as the input sheet, and will create outpu
 - `-o <output_sheet>, --output`: Required, Path to the output ingest sheet.
 - `-a, --attachments_given`: Optional flag for when the attachment rows are provided, usually for books or compound objects
 - `-v, --verbose`: Optional flag to print additional debug information to the command line
+- `--audio_visual`: Optional flag to specify that this sheet will be audio visual works
