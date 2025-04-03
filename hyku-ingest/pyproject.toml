@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "hyku-ingest"
-version = "0.0.3"
+version = "0.0.5"
 description = ""
 authors = ["Weston49 <weston.agreda@gmail.com>"]
 readme = "README.md"

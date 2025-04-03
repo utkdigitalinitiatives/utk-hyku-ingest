@@ -211,7 +211,7 @@ def main(input_file, output_file, attachments_given, verbose, audio_visual):
         print("Attachments given, only creating FileSet rows")
 
     # These columns headers will be added if they do not already exist, although they should always exist, mostly here for debugging
-    additional_fields = ['source_identifier', 'title', 'model', 'parents', 'abstract', 'sequence', 'visibility', 'rdf_type', 'remote_files']
+    additional_fields = ['source_identifier', 'title', 'model', 'parents', 'abstract', 'sequence', 'visibility', 'rdf_type', 'remote_files', 'primary_identifier', 'has_work_type']
     fieldnames = reader.fieldnames
     # reads all columns names and adds the ones that do not exist
     for field in additional_fields:
