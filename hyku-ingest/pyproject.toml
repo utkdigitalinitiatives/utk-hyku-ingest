@@ -1,9 +1,13 @@
 [tool.poetry]
 name = "hyku-ingest"
-version = "0.0.7"
+version = "0.0.11"
 description = ""
 authors = ["Weston49 <weston.agreda@gmail.com>"]
 readme = "README.md"
+include = [
+    "hyku_ingest/ingest.py",
+    "hyku_ingest/split_sheet.py"
+]
 
 [tool.poetry.dependencies]
 python = "^3.13"
