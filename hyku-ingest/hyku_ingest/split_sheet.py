@@ -8,7 +8,7 @@ import os
 # Change the chunk size down to 5000 if we want to keep doing these half size sheets, if not then keep it 10000
 # This value used to be 2000 but that would've meant hundreds more sheets to import, so it was upped to 10000
 # potentially decreased to 5000 just to see if overloading was an issue
-def split_sheet(input_file, output_file_prefix, non_filesets_attachment_file, chunk_size=10000):
+def split_sheet(input_file, output_file_prefix, non_filesets_attachment_file, chunk_size):
   with open(input_file, 'r') as csvfile:
     reader = csv.reader(csvfile)
     header = next(reader)
@@ -64,4 +64,4 @@ if __name__ == "__main__":
     # hopefully this file is always empty, if not there are problems
     non_filesets_attachment_file = os.path.join(output_dir, f'{base_filename}_empty.csv')
 
-    split_sheet(input_file, output_file_prefix, non_filesets_attachment_file)
+    split_sheet(input_file, output_file_prefix, non_filesets_attachment_file, 10000)
