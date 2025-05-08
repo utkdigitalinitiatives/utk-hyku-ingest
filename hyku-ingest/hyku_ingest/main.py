@@ -41,8 +41,16 @@ HAS_WORK_TYPE_MAP = {
     "Video": "https://ontology.lib.utk.edu/works#VideoWork "
 }
 
-# Given a work row, does any edits/checks needed to the row and returns it
-def verify_work_row(work, verbose):
+def verify_work_row(work, verbose=False):
+  """Does any edits or checks to given work row, currently fixes has_work_type field, removes whitespace from source_identifier, and copies over primary identifier.
+
+  Args:
+      work (dict): The work row that will be verified and fixed
+      verbose (bool, optional): Option to print out extra debug information. Defaults to False.
+
+  Returns:
+      dict: The work row after any edits or fixes
+  """
   if 'has_work_type' not in work:
     if work['model'].lower() in HAS_WORK_TYPE_MAP:
       work['has_work_type'] = HAS_WORK_TYPE_MAP[work['model'].lower()]
@@ -54,23 +62,72 @@ def verify_work_row(work, verbose):
     work['source_identifier'] = work['source_identifier'].strip()
     work['source_identifier'] = work['source_identifier'].replace(' ', '_')
   work['primary_identifier'] = work['source_identifier']
+  if work['rdf_type'] == "":
+    if work['model'].lower() == 'pdf':
+      work['rdf_type'] = RDF_TYPE_MAP['PDF']
+    elif "_i." in work['file_identifier']:
+      work['rdf_type'] = RDF_TYPE_MAP['Intermediate'] 
+    elif "_p." in work['file_identifier']:
+      work['rdf_type'] = RDF_TYPE_MAP['Preservation']
+    elif "_transcript." in work['file_identifier']:
+      work['rdf_type'] = RDF_TYPE_MAP['Transcript']
+    elif "_ocr." in work['file_identifier']:
+      work['rdf_type'] = RDF_TYPE_MAP['OCR']
+    elif "_hocr." in work['file_identifier']:
+      work['rdf_type'] = RDF_TYPE_MAP['HOCR']
+    elif ".jpg" in work['file_identifier'] or ".mp3" in work['file_identifier'] or ".jp2" in work["file_identifier"]:
+      work['rdf_type'] = RDF_TYPE_MAP['Access']
+    else:
+      work['rdf_type'] = "" # default rdf type is currently nothing
   return work
 
-# Given an attachment row, does any edits/checks needed to the row and returns it
-def verify_attachment_row(attachment, verbose):
+def verify_attachment_row(attachment, verbose=False):
+  """Does any edits or checks to given attachment row, currently sets correct rdf_type, copies over primary_identifier, and removes whitespace from source_identifier.
+
+  Args:
+    attachment (dict): Attachment row as a dictionary that you want to edit/check
+    verbose (bool, optional): Option to print out extra debug information. Defaults to False.
+
+  Returns:
+    dict: A dictionary of the attachment row with any fixes done
+  """
   if ' ' in attachment['source_identifier']:
     if verbose:
       print("removing spaces from source_identifier")
     attachment['source_identifier'] = attachment['source_identifier'].strip()
     attachment['source_identifier'] = attachment['source_identifier'].replace(' ', '_')
+  attachment['primary_identifier'] = attachment['source_identifier']
+  
+  # adding the rdf type if it is not already present
+  if attachment['rdf_type'] == "":
+    if "_hocr." in attachment['source_identifier']:
+      attachment['rdf_type'] = RDF_TYPE_MAP['HOCR']
+    elif "_ocr." in attachment['source_identifier']:
+      attachment['rdf_type'] = RDF_TYPE_MAP['OCR']
+    elif "_i." in attachment['file_identifier']:
+      attachment['rdf_type'] = RDF_TYPE_MAP['Intermediate'] 
+    elif "_p." in attachment['file_identifier']:
+      attachment['rdf_type'] = RDF_TYPE_MAP['Preservation']
+    elif "_transcript." in attachment['file_identifier']:
+      attachment['rdf_type'] = RDF_TYPE_MAP['Transcript']
+    elif ".jpg" in attachment['file_identifier'] or ".mp3" in attachment['file_identifier'] or ".jp2" in attachment["file_identifier"]:
+      attachment['rdf_type'] = RDF_TYPE_MAP['Access']
+    else:
+      attachment['rdf_type'] = ""
   
   return attachment
 
-# Given a work row, returns an attachment row with all pertinent information filled in 
-#   work - This is a dict containing the work row that this attachment will be associated with
-#   verbose - T/F value to print out extra debug info
-#   av - optional, default is None, for specifying if this attachment should be the first (1) or second (2) for a given audio visual work
 def create_attachment_row(work, verbose=False, av=None):
+  """Creates an attachment row from a given work row
+
+  Args:
+    work (dict): The work row to create the attachment row from as a dictionary.
+    verbose (bool, optional): Option to print out extra debug information. Defaults to False
+    av (int, optional): Represents how to handle audio visual works. None for not av, 1 for first attachment of av, 2 for transcript attachment for av. Defaults to None
+  
+  Returns:
+    dict: A dictionary representation of the attachment row
+  """
   if work['model'].lower() == 'image':                # Special case for images
     title = f"Image for {work['source_identifier']}"
   elif av == 2:                                       # Special case for audio visual files
@@ -96,17 +153,14 @@ def create_attachment_row(work, verbose=False, av=None):
     rdf = RDF_TYPE_MAP['OCR']
   elif "_hocr." in work['file_identifier']:
     rdf = RDF_TYPE_MAP['HOCR']
-  elif ".jpg" in work['file_identifier'] or ".mp3" in work['file_identifier']:
+  elif ".jpg" in work['file_identifier'] or ".mp3" in work['file_identifier'] or ".jp2" in work["file_identifier"]:
     rdf = RDF_TYPE_MAP['Access']
   else:
-    rdf = ""
+    rdf = "" # default rdf type is currently nothing
   
-  # This is the special case for the second attachment from a single av work, which should always just be a transcript
+  # Special case for the second attachment from a single av work, which should always be a transcript
   if av == 2:
     rdf = RDF_TYPE_MAP['Transcript']
-  
-  # Handle special case for source id of av work
-  if av == 2:
     source_id = work['source_identifier'] + '_transcript_attachment'
   else:
     source_id = work['source_identifier'] + '_attachment'
@@ -117,7 +171,7 @@ def create_attachment_row(work, verbose=False, av=None):
   if title in RESTRICTED_TITLES:
     vis = VISIBILITY_TYPE_MAP[1]
 
-  # this defines everything in the attachment row
+  # Builds the final attachment row dictionary
   attachment = {
     'source_identifier': source_id,
     'primary_identifier': source_id,
@@ -130,13 +184,19 @@ def create_attachment_row(work, verbose=False, av=None):
   }
   return attachment
 
-
-# Given an attachment row, returns a fileset row with all data filled in
-# Everything is essentially copied from attachment row with minor changes
-# remote files will add _transcript before the file extension when av = 2, since the work will just define the first of the two av files
-# work is needed for correct source_identifier and getting the file_identifier
 def create_fileset_row(attachment, work, verbose, av=None):
-  # this defines everything in the fileset row
+  """Creates and returns a fileset row with all of the data filled in, most of the data is copied from the attachment
+
+  Args:
+      attachment (dict): The attachment row to build this fileset from
+      work (dict): The associated work row for getting the source_identifier and file_identifier
+      verbose (bool): Option to print out extra debug information
+      av (int, optional): Option for specifying audio visual row, 2 will add _transcript before the file extension. Defaults to None.
+
+  Returns:
+      dict: The finished fileset row with all correct metadata filled in
+  """
+  # Builds the final fileset row dictionary
   fileset = {
     'source_identifier': work['source_identifier'] + '_fileset',
     'primary_identifier': work['source_identifier'] + '_fileset',
@@ -151,9 +211,15 @@ def create_fileset_row(attachment, work, verbose, av=None):
   }
   return fileset
 
-# Takes a file identifier and attempts to put _transcript right before the file extension
-# this is just used for the special case that the works are av
 def append_transcript(file_id):
+  """Puts '_transcript' before the file extension for av filesets for the remote_files section
+
+  Args:
+      file_id (string): The file_identifier from the original work row
+
+  Returns:
+      string: The new file_identifier with '_transcript' added before the file extension
+  """
   parts = file_id.rsplit('.', 1)
   if len(parts) == 2:
     return f"{parts[0]}_transcript.{parts[1]}"
@@ -161,17 +227,32 @@ def append_transcript(file_id):
     print(f"Issue with adding transcript to remote file \"{file_id}\"")
     return file_id
 
-#:TODO: this does not need to be its own function, but this works for now
 def remove_file_identifier_column(row):
+  """Helper function to remove the file_identifier column from a row dictionary.
+
+  Args:
+      row (dict): The row you want to remove the column from.
+
+  Returns:
+      dict: The row dictionary with the file_identifier column removed.
+  """
   if 'file_identifier' in row:
     del row['file_identifier']
   return row
 
-# This creates the titles and sets the rdf type for the book pages attachment rows, will return the modified attachment row dict
-# takes a new reader to find this attachment's parent from infile, there is probably a better way to do this
-def add_title_to_book_page(attachment, reader, verbose):
-  # If there is a title already there, then do nothing
-  if attachment['title'] != "":
+def add_title_to_book_page(attachment, reader, verbose=False):
+  """Sets the title field for book page attachments. Uses the parent's title and sequence to build correct page title. Also sets the correct rdf_type.
+
+  Args:
+      attachment (dict): The book page attachment row to make edits to.
+      reader (DictReader): A file reader for the infile to use for finding this attachment's parent.
+      verbose (bool, optional): Option to print out extra debug information. Defaults to False.
+
+  Returns:
+      dict: The attachment row with the title and rdf_type fields set correctly.
+  """
+
+  if attachment['title'] != "": 
     return attachment
   parent_title = None
   for row in reader:
@@ -201,7 +282,7 @@ def add_title_to_book_page(attachment, reader, verbose):
     attachment['rdf_type'] = RDF_TYPE_MAP['Preservation']
   elif "_transcript." in attachment['file_identifier']:
     attachment['rdf_type'] = RDF_TYPE_MAP['Transcript']
-  elif ".jpg" in attachment['file_identifier'] or ".mp3" in attachment['file_identifier']:
+  elif ".jpg" in attachment['file_identifier'] or ".mp3" in attachment['file_identifier'] or ".jp2" in attachment["file_identifier"]:
     attachment['rdf_type'] = RDF_TYPE_MAP['Access']
   else:
     attachment['rdf_type'] = ""
@@ -209,6 +290,16 @@ def add_title_to_book_page(attachment, reader, verbose):
   return attachment
 
 def ingest_main(input_file, output_file, attachments_given, verbose, audio_visual):
+  """The main function that is called from the create_sheet driver function, these parameters match the command line arguments for create_sheet.
+  This function is what will do all of the processing of the data and writing to the outfiles. 
+
+  Args:
+      input_file (srt): The filename of the input file.
+      output_file (str): The filename of the desired output file.
+      attachments_given (bool): Option for if attachment rows should be expected in the input file
+      verbose (bool): Option to print out extra debug information.
+      audio_visual (bool): Option for if this file contains all audio visual works. 
+  """
   with open(input_file, mode='r', encoding='utf-8-sig') as infile, open(output_file, mode='w', newline='', encoding='utf-8') as outfile:
     reader = csv.DictReader(infile)
     if verbose:
@@ -241,12 +332,12 @@ def ingest_main(input_file, output_file, attachments_given, verbose, audio_visua
     writer = csv.DictWriter(outfile, fieldnames=fieldnames_for_writer)
     writer.writeheader()
     
-    # not a huge fan of how nested the if statements are here, could get out of hand and unreadable, may rework logic flow later
+    # Main for loop that reads every row in the infile and processes it
     for row in reader:
       if row['model'] == "Attachment":
         if attachments_given:
           if audio_visual: # attachments given for audio visual not currently supported, shouldn't be hard to add if needed
-            print("Unsure if this will ever happen, erroring for now if it does")
+            print("Attachments given for audio visual works. Unexpected, exiting.")
             exit(1) 
           attachment = verify_attachment_row(row, verbose)
           # Adds title and rdf type for book page attachment rows, TODO: make this not so poorly written later
@@ -276,7 +367,7 @@ def ingest_main(input_file, output_file, attachments_given, verbose, audio_visua
         work = verify_work_row(row, verbose)
         if row['model'] == 'Book' or row['model'] == 'CompoundObject':
           if not attachments_given:
-            print("Attachments given not specified, book/compound detected, most likely an error")
+            print("Attachments given not specified, book/compound detected. Use the -a flag if attachments are in the input file.")
             exit(1)
         if audio_visual: # this is the special case of audio visual works, untested but should work in principal
           if attachments_given: # attachments given for audio visual not currently supported, shouldn't be hard to add if needed
@@ -319,10 +410,15 @@ def ingest_main(input_file, output_file, attachments_given, verbose, audio_visua
 # ======== end of ingest code ===============
 
 # ======== start of split sheet code =========
-# Change the chunk size down to 5000 if we want to keep doing these half size sheets, if not then keep it 10000
-# This value used to be 2000 but that would've meant hundreds more sheets to import, so it was upped to 10000
-# potentially decreased to 5000 just to see if overloading was an issue
 def split_sheet(input_file, output_file_prefix, non_filesets_attachment_file, chunk_size):
+  """Splits a given input sheet into filesets and attachments, then splits those into files with a max number of rows.
+
+  Args:
+      input_file (str): The filename of the input file. This is the file that will be split up, this file itself will not be changed.
+      output_file_prefix (str): A string to start every newly created file with, is usually just the input file without the file extension.
+      non_filesets_attachment_file (str): Filename of the file where any miscellaneous rows will go. This file should be empty.
+      chunk_size (int): Maximum number of rows that each file can have, excluding the header row.
+  """
   with open(input_file, 'r') as csvfile:
     if os.stat(input_file).st_size == 0:
       print("Input file is empty. Exiting.")
@@ -370,19 +466,29 @@ def split_sheet(input_file, output_file_prefix, non_filesets_attachment_file, ch
         writer.writerows(chunk)
 # ======== End of split sheet code =========
 
-
+# ======== Driver functions ================
 def create_sheet(args):
+  """Driver function for the create_sheet command line option, will parse command line arguments and run ingest_main.
+
+  Args:
+      args (args): A namespace of the command line arguments.
+  """
   if not args.input_file or not args.output_file:
-    print("Error: Both input_file and output_file arguments are required. Use --help to see help menu.")
+    print("Error: Both input_file and output_file arguments are required. Use `ingest create_sheet -h` to see help menu.")
     exit(1)
   if args.input_file == args.output_file:
-    print("Error: Input file cannot be the same as output file. Use --help to see help menu")
+    print("Error: Input file cannot be the same as output file. Use `ingest create_sheet -h` to see help menu")
     exit(1)
   ingest_main(args.input_file, args.output_file, args.attachments_given, args.verbose, args.audio_visual)
 
 def split_sheet_main(args):
+  """Driver function for the split_sheet command line option, will parse command line arguments and run split_sheet.
+
+  Args:
+      args (args): A namespace of the command line arguments.
+  """
   if not args.input_file:
-    print("Error: input_file argument is required. Use --help to see help menu.")
+    print("Error: input_file argument is required. Use `ingest split_sheet -h` to see help menu.")
     exit(1)
   if not args.num_rows:
     print("No number of rows set, using default of 10000")
@@ -394,39 +500,49 @@ def split_sheet_main(args):
   base_filename = os.path.splitext(os.path.basename(input_file))[0]
   output_dir = os.path.abspath(os.path.dirname(input_file))
   output_file_prefix = os.path.join(output_dir, f'{base_filename}_')
-  # hopefully this file is always empty, if not there are problems
+  # hopefully this file is always empty, if not there are unexpected rows in the input file
   non_filesets_attachment_file = os.path.join(output_dir, f'{base_filename}_empty.csv')
 
   split_sheet(input_file, output_file_prefix, non_filesets_attachment_file, chunk_size)
 
 def no_command(args):
-  print("No command given. Use ingest --help to see commands")
+  """Driver function for when no subcommand is given, currently just prints out some help information and exits.
+
+  Args:
+      args (args): Nothing is done with these command line args.
+  """
+  print("No command given. Use `ingest -h` to see commands.")
   exit(1)
 
 def start():
-  # Create the main argument parser and the regular flags for it
-  # The main functionality will be creating ingeset sheets 
-  parser = argparse.ArgumentParser(description='Generate CSV for attachments and filesets.')
+  """
+  This is the function that gets run when this package is installed and you run the command `ingest`. This behavior is defined in the pyproject.toml
+  """
+  
+  # Create the main argument parser and add the subparsers for each different command
+  parser = argparse.ArgumentParser(description='Tools for creating and manipulating ingest spreadsheets')
   parser.set_defaults(func=no_command)
-  subparsers = parser.add_subparsers(help='subcommand help here')
+  subparsers = parser.add_subparsers(help='The subcommands are as follows: ')
+
+  # Creating the subparser for the main functionality - create_sheet
   parser_create_sheet = subparsers.add_parser('create_sheet', help='Create ingest sheets from metadata files')
   parser_create_sheet.add_argument('-i', '--input_file', type=str, help='Input CSV file with metadata')
   parser_create_sheet.add_argument('-o', '--output_file', type=str, help='Output CSV file with generated works, attachments, and filesets rows')
   parser_create_sheet.add_argument('-a', '--attachments_given', action='store_true', help='Flag to generate just filesets')
   parser_create_sheet.add_argument('-v', '--verbose', action='store_true', help='Flag to print out debug information')
-
-  #This flag could be removed if we just check the first work and if its av set this flag, will have to look into this more, for now this works
-  parser_create_sheet.add_argument('--audio_visual', action='store_true', help='Flag to specify that these will be audio visual works')
+  parser_create_sheet.add_argument('--audio_visual', action='store_true', help='Flag to specify that these will be audio visual works') # probably don't need this, keeping it for now
   parser_create_sheet.set_defaults(func=create_sheet)
 
+  # Creating the subparser for the split_sheet functionality
   parser_split_sheet = subparsers.add_parser('split_sheet', help='Split and sort a large ingest sheet into smaller files')
   parser_split_sheet.add_argument('-i', '--input_file', type=str, help='Input CSV file')
   parser_split_sheet.add_argument('-n', '--num_rows', type=str, help='The number of rows per file')
   parser_split_sheet.set_defaults(func=split_sheet_main)
 
+  # collect the arguments and run the entered subparser's function
   args = parser.parse_args()
   args.func(args)
 
-# input file and output file flags are required and must be different files
+
 if __name__ == "__main__":
   start()
