@@ -1,16 +1,13 @@
 [tool.poetry]
 name = "hyku-ingest"
-version = "0.0.12"
+version = "0.0.14"
 description = ""
 authors = ["Weston49 <weston.agreda@gmail.com>"]
 readme = "README.md"
-include = [
-    "hyku_ingest/ingest.py",
-    "hyku_ingest/split_sheet.py"
-]
 
 [tool.poetry.dependencies]
 python = "^3.13"
+argparse = "^1.4.0"
 
 
 [build-system]
@@ -18,4 +15,4 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-ingest = "hyku_ingest.main:start"
+ingest = "hyku_ingest.ingest:start"
